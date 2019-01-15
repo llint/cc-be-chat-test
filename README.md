@@ -20,3 +20,9 @@ finally, we use a collections/SortedMap `SortedMap{count: Set(words)}` to track 
 
 - A trie `profanityWords` is used to keep track of the profanity words
 - if any word in a message has any profanity word as a prefix (or the whole word), the word is replaced as "*", and the word is not tracked by popular words
+
+## Test
+
+I don't have a lot of time writing test cases, but would like to lay out the _plan_ here:
+- profanity filtering: building a trie with a few words, and then pick a set of words, and check against the trie, and see if the result match expectation - the functions `buildProfanityWordsTrie` and `detectAndReplaceProfanityWords` are exported for testing purposes
+- popular words: two class methods `updatePopularity` and `trimExpiredPopularWords` would be used for testing purposes.

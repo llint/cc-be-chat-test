@@ -33,4 +33,3 @@ const askName = () => {
 
 run();
 
-const ChatServer = require("./ChatServer.js");
