@@ -37,7 +37,18 @@ module.exports = class ChatServer {
             }
             return root;
         }
-        this.profanityWords = buildProfanityWordsTrie([]);
+
+        // just read the words into an array
+        var lineReader = require('readline').createInterface({
+            input: require('fs').createReadStream('profanity_words.txt')
+        });
+
+        var words = [];
+        lineReader.on('line', function (line) {
+            words.push(line);
+        });
+
+        this.profanityWords = buildProfanityWordsTrie(words);
 
         // Note: this function currently only detects if the word is prefixed with any profanity word, but not in the middle!
         function detectAndReplaceProfanityWords(word) {
