@@ -25,4 +25,4 @@ finally, we use a collections/SortedMap `SortedMap{count: Set(words)}` to track 
 
 I don't have a lot of time writing test cases, but would like to lay out the _plan_ here:
 - profanity filtering: building a trie with a few words, and then pick a set of words, and check against the trie, and see if the result match expectation - the functions `buildProfanityWordsTrie` and `detectAndReplaceProfanityWords` are exported for testing purposes
-- popular words: two class methods `updatePopularity` and `trimExpiredPopularWords` would be used for testing purposes.
+- popular words: two class methods `updatePopularity` and `trimExpiredPopularWords` would be used for testing purposes, given a sample of input words, and wait a few seconds, and get the `leaderboard.max()` would indicate the most popular words for the last 5 seconds
