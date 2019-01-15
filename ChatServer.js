@@ -1,10 +1,12 @@
-const WebSocket = require('ws');
+'use strict';
+
+var WebSocket = require('ws');
 
 var SortedMap = require("collections/sorted-map");
 var List = require("collections/list");
 var Set = require("collections/set");
 
-class ChatServer {
+module.exports = class ChatServer {
     constructor() {
         this.wss = new WebSocket.Server({ port: 8080 });
         this.clients = {};
@@ -20,6 +22,38 @@ class ChatServer {
 
         // the leaderboard that arranges words sorted by count
         this.leaderboard = new SortedMap(); // {count: set(words)}
+
+        // We use a trie to define the profanity dictionary
+        function buildProfanityWordsTrie(words) {
+            var root = {}; // {char: next}
+            for (var word of words) {
+                var next = root;
+                for (var char of word) {
+                    if (!next[char]) {
+                        next[char] = {};
+                    }
+                    next = next[char];
+                }
+            }
+            return root;
+        }
+        this.profanityWords = buildProfanityWordsTrie([]);
+
+        // Note: this function currently only detects if the word is prefixed with any profanity word, but not in the middle!
+        function detectAndReplaceProfanityWords(word) {
+            var next = this.profanityWords;
+            for (var char of word) {
+                if (next[char]) {
+                    next = next[char];
+                    if (next == {}) {
+                        // a full profanity word is found being the prefix of the word
+                        return "*".repeat(word.length);
+                    }
+                } else {
+                    return word;
+                }
+            }
+        }
 
         wss.on('connection', function connection(ws) {
             var clientId = "Client" + ++this.clientIdBase;
@@ -64,10 +98,10 @@ class ChatServer {
                 }
 
                 // XXX: not performant, but should be safe
-                for (var ts in tssToRemove) {
+                for (var ts of tssToRemove) {
                     this.histogram.remove(ts);
                 }
-                for (var word in wordsToRemove) {
+                for (var word of wordsToRemove) {
                     this.wordsCount.remove(word);
                 }
             }
@@ -100,11 +134,13 @@ class ChatServer {
 
                     // now process the words
                     var now = Date.now();
-                    var words = this.histogram[now] || {};
-                    for (var word in splitted) {
-                        var count = words[word] || 0;
-                        ++count;
-                        words[word] = count;
+                    var words = this.histogram[now] || {}; // {word: count}
+                    for (var word of splitted) {
+                        if (detectAndReplaceProfanityWords(word) == word) {
+                            var count = words[word] || 0;
+                            ++count;
+                            words[word] = count;
+                        }
                     }
                     this.histogram[now] = words; // update
 
