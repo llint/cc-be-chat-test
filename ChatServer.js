@@ -12,8 +12,13 @@ class ChatServer {
 
         this.messages = new List([]);
 
+        // at a specific time, what words are processed
         this.histogram = new SortedMap(); // {timestamp: {word: count}}
+
+        // overall, the count of each each word
         this.wordsCount = {}; // {word: count}
+
+        // the leaderboard that arranges words sorted by count
         this.leaderboard = new SortedMap(); // {count: set(words)}
 
         wss.on('connection', function connection(ws) {
@@ -21,11 +26,57 @@ class ChatServer {
             this.clients[clientId] = {ws:ws, ts:Date.now()};
             ws.send(this.messages); // send the saved up to 50 messages to the new client
 
+            function trimExpiredPopularWords(now) {
+                var then = now.setSeconds(now.getSeconds() - 5);
+                var tssToRemove = [];
+                for (var ts in this.histogram) {
+                    if (ts < then) {
+                        var words = this.histogram[ts]; // {word: count}
+                        //this.histogram.remove(ts); // XXX: is this safe during iteration in javascript?
+                        tssToRemove.push(ts);
+                        var wordsToRemove = [];
+                        for (var word in words) {
+                            var count = this.wordsCount[word];
+                            if (count > 0) {
+                                // remove the word from the leaderboard with the old count, and add it back with the decremented count
+                                // if the new count is 0, don't add back to the leaderboard
+                                var wordsAtLevel = this.leaderboard[count]; // set{words}
+                                if (wordsAtLevel) {
+                                    wordsAtLevel.remove(word);
+                                    if (wordsAtLevel.length == 0) {
+                                        this.leaderboard.remove(count);
+                                    }
+                                }
+                                count -= words[word];
+                                if (count <= 0) {
+                                    wordsToRemove.push(word);
+                                    //this.wordsCount.remove(word); // XXX: is this safe during iteration in javascript?
+                                } else {
+                                    var wordsAtLevel = this.leaderboard[count] || new Set(); // add word with new count
+                                    wordsAtLevel.add(word);
+                                    this.leaderboard[count] = wordsAtLevel;
+                                }
+                            }
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                // XXX: not performant, but should be safe
+                for (var ts in tssToRemove) {
+                    this.histogram.remove(ts);
+                }
+                for (var word in wordsToRemove) {
+                    this.wordsCount.remove(word);
+                }
+            }
+
             ws.on('message', function incoming(message) {
                 console.log('received: %s', message);
                 var splitted = message.split(" ");
                 if (splitted[0] == "/popular") {
-                    // todo: this also triggers trimming!
+                    trimExpiredPopularWords(Date.now());
                     ws.send(this.leaderboard.max());
                 } else if (splitted[0] == "/stats") {
                     var clientId = splitted[1];
@@ -79,48 +130,7 @@ class ChatServer {
                     }
 
                     // the new message would trigger trimming of the words that were added 5 seconds ago
-                    var then = now.setSeconds(now.getSeconds() - 5);
-                    var tssToRemove = [];
-                    for (var ts in this.histogram) {
-                        if (ts < then) {
-                            var words = this.histogram[ts]; // {word: count}
-                            //this.histogram.remove(ts); // XXX: is this safe during iteration in javascript?
-                            tssToRemove.push(ts);
-                            var wordsToRemove = [];
-                            for (var word in words) {
-                                var count = this.wordsCount[word];
-                                if (count > 0) {
-                                    // remove the word from the leaderboard with the old count, and add it back with the decremented count
-                                    // if the new count is 0, don't add back to the leaderboard
-                                    var wordsAtLevel = this.leaderboard[count]; // set{words}
-                                    if (wordsAtLevel) {
-                                        wordsAtLevel.remove(word);
-                                        if (wordsAtLevel.length == 0) {
-                                            this.leaderboard.remove(count);
-                                        }
-                                    }
-                                    count -= words[word];
-                                    if (count <= 0) {
-                                        wordsToRemove.push(word);
-                                        //this.wordsCount.remove(word); // XXX: is this safe during iteration in javascript?
-                                    } else {
-                                        var wordsAtLevel = this.leaderboard[count] || new Set(); // add word with new count
-                                        wordsAtLevel.add(word);
-                                        this.leaderboard[count] = wordsAtLevel;
-                                    }
-                                }
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-                    // XXX: not performant, but should be safe
-                    for (var ts in tssToRemove) {
-                        this.histogram.remove(ts);
-                    }
-                    for (var word in wordsToRemove) {
-                        this.wordsCount.remove(word);
-                    }
+                    trimExpiredPopularWords(now);
                 }
             });
         });
